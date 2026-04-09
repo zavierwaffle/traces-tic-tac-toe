@@ -1,0 +1,163 @@
+openapi: 3.0.4
+info:
+  description: A simple Tic-Tac-Toe game with bot.
+  title: Tic-Tac-Toe
+  version: 0.0.1
+servers:
+- url: /
+paths:
+  /games:
+    get:
+      description: Get list of now playing games.
+      operationId: games_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  type: integer
+                type: array
+          description: List of games IDs.
+      x-openapi-router-controller: openapi_tic_tac_toe.controllers.default_controller
+    post:
+      description: Creates a new game.
+      operationId: games_post
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: integer
+          description: New game's ID.
+      x-openapi-router-controller: openapi_tic_tac_toe.controllers.default_controller
+  /games/{game_id}:
+    delete:
+      description: Remove current game.
+      operationId: games_game_id_delete
+      parameters:
+      - description: Game's ID.
+        explode: false
+        in: path
+        name: game_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      responses:
+        "204":
+          description: Game is successfully deleted.
+        "404":
+          description: Game is not found.
+      x-openapi-router-controller: openapi_tic_tac_toe.controllers.default_controller
+    get:
+      description: Get state of current game.
+      operationId: games_game_id_get
+      parameters:
+      - description: Game's ID.
+        explode: false
+        in: path
+        name: game_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+          description: This game.
+        "404":
+          description: Game is not found.
+      x-openapi-router-controller: openapi_tic_tac_toe.controllers.default_controller
+    put:
+      description: Make a move as human.
+      operationId: games_game_id_put
+      parameters:
+      - description: Game's ID.
+        explode: false
+        in: path
+        name: game_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/_games__game_id__put_request"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+          description: New state of game after bot's move.
+        "400":
+          description: X or Y position is invalid or this move is already done by
+            human or bot.
+        "405":
+          description: Game is already finished with determined state.
+        "404":
+          description: Game is not found.
+      x-openapi-router-controller: openapi_tic_tac_toe.controllers.default_controller
+components:
+  schemas:
+    Game:
+      example:
+        game_state: CONTINUE
+        game_field:
+        - NONE
+        - NONE
+        game_id: 0
+      properties:
+        game_id:
+          description: Game's ID.
+          title: game_id
+          type: integer
+        game_field:
+          description: Playing field.
+          items:
+            enum:
+            - NONE
+            - HUMAN
+            - BOT
+            type: string
+          title: game_field
+          type: array
+        game_state:
+          description: Current game's state.
+          enum:
+          - CONTINUE
+          - HUMAN_WIN
+          - BOT_WIN
+          title: game_state
+          type: string
+      required:
+      - field
+      - state
+      title: Game
+      type: object
+    _games__game_id__put_request:
+      properties:
+        px:
+          description: Dot's X position.
+          maximum: 3
+          minimum: 1
+          title: px
+          type: integer
+        py:
+          description: Dot's Y position.
+          maximum: 3
+          minimum: 1
+          title: py
+          type: integer
+      required:
+      - px
+      - py
+      title: _games__game_id__put_request
+      type: object

@@ -1,0 +1,84 @@
+services:
+  app:
+    build: .
+    container_name: tictactoe-app
+    environment:
+      - TTT_LOGGING_FILE_PATH=/var/log/tictactoe/app.log
+      - TTT_LOGGING_DEACTIVATE_WERKZEUG=yes
+      - TTT_LOGGING_DEACTIVATE_APP_TO_STDOUT=no
+    volumes:
+      - app_logs:/var/log/tictactoe
+    ports:
+      - "8080:8080"
+    depends_on:
+      - tempo
+
+  prometheus:
+    image: prom/prometheus
+    container_name: tictactoe-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana
+    container_name: tictactoe-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki
+    container_name: tictactoe-loki
+    command:
+      - "-config.file=/etc/loki/local-config.yaml"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: tictactoe-tempo
+    command:
+      - "-target=all"
+      - "-config.file=/etc/tempo/tempo.yaml"
+    volumes:
+      - ./tempo/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "3200:3200"
+
+  alloy:
+    image: grafana/alloy
+    container_name: tictactoe-alloy
+    command:
+      - "run"
+      - "/etc/alloy/config.alloy"
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - app_logs:/var/log/tictactoe:ro
+    depends_on:
+      - app
+      - loki
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  app_logs:
