@@ -272,6 +272,19 @@ def games_game_id_put(game_id: int, body):
 
             return NOT_FOUND
 
+        game = g_games[game_id]
+
+        if GameState(game.game_state) != GameState.NoWinnerYet:
+            metrics_make_game_move_request(False)
+
+            warn(parent, f"Game [id={game_id}] can't handle move, because game is already finished")
+
+            span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
+            span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, "game is already finished")
+            span_make_a_move.set_status(Status(StatusCode.ERROR))
+
+            return ALREADY_DONE
+
         with g_tracer.start_as_current_span(span_name("check human move")) as span_check_human_move:
             info(parent, f"Game [id={game_id}] handling movement...")
 
@@ -316,23 +329,6 @@ def games_game_id_put(game_id: int, body):
                 span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "px or py out of range")
 
                 return DATA_INVALID
-
-            game = g_games[game_id]
-
-            if GameState(game.game_state) != GameState.NoWinnerYet:
-                metrics_make_game_move_request(False)
-
-                warn(parent, f"Game [id={game_id}] can't handle move, because game is already finished")
-
-                for span in spans:
-                    span.set_status(Status(StatusCode.ERROR))
-
-                span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, span_make_a_move_message)
-                span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
-
-                span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "game is already finished")
-
-                return ALREADY_DONE
 
             pos = getpos(px, py)
 
