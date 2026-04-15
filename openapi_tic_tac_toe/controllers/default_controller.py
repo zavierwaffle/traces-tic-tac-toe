@@ -82,6 +82,15 @@ ATT_GAME_MOVE_PLAYER_MOVED = "ttt.game_move.player_moved"
 ATT_GAME_MOVE_BOT_MOVED = "ttt.game_move.bot_moved"
 ATT_GAME_MOVE_STATUS = "ttt.game_move.status"
 
+ATT_GAME_CHECK_WINNER_EXPECTED = "ttt.game_check_winner.expected"
+ATT_GAME_CHECK_WINNER_IS_ROW = "ttt.game_check_winner.is_row"
+ATT_GAME_CHECK_WINNER_IS_COLUMN = "ttt.game_check_winner.is_column"
+ATT_GAME_CHECK_WINNER_IS_DIAG = "ttt.game_check_winner.is_diag"
+ATT_GAME_CHECK_WINNER_ROW = "ttt.game_check_winner.row"
+ATT_GAME_CHECK_WINNER_COLUMN = "ttt.game_check_winner.column"
+ATT_GAME_CHECK_WINNER_DIAG = "ttt.game_check_winner.diag"
+ATT_GAME_CHECK_WINNER_STATUS = "ttt.game_check_winner.status"
+
 def __msg(parent: str, msg: str):
     return f"User called {parent}: {msg}"
 
@@ -184,15 +193,13 @@ def games_game_id_put(game_id: int, body):
     method = "PUT"
     parent = f"{method} /games/{{game_id}}"
 
-    with g_tracer.start_as_current_span(span_name("make move in game")) as span:
+    with g_tracer.start_as_current_span(span_name("make move in game")) as span_make_a_move:
         error_p = "undefined"
 
-        span.set_attribute(ATT_HTTP_METHOD, method)
-        span.set_attribute(ATT_GAME_ID, game_id)
-        span.set_attribute(ATT_GAME_MOVE_PLAYER_MOVED, False)
-        span.set_attribute(ATT_GAME_MOVE_BOT_MOVED, False)
-        span.set_attribute(ATT_GAME_MOVE_PX, error_p)
-        span.set_attribute(ATT_GAME_MOVE_PY, error_p)
+        span_make_a_move.set_attribute(ATT_HTTP_METHOD, method)
+        span_make_a_move.set_attribute(ATT_GAME_ID, game_id)
+        span_make_a_move.set_attribute(ATT_GAME_MOVE_PLAYER_MOVED, False)
+        span_make_a_move.set_attribute(ATT_GAME_MOVE_BOT_MOVED, False)
 
         size = 3
         indexes = range(1, size + 1)
@@ -200,36 +207,56 @@ def games_game_id_put(game_id: int, body):
         def getpos(x: int, y: int) -> int:
             return (y - 1) * size + (x - 1)
 
-        def check_winner(expected_unit: GameFieldUnit, cells: List[str]) -> bool:
-            expected = expected_unit.value
+        def check_winner(expected_unit: GameFieldUnit, cells: List[str], who: str) -> bool:
+            with g_tracer.start_as_current_span(span_name(f"check is {who} winner")) as span_check_winner:
+                expected = expected_unit.value
 
-            for y in indexes:
-                count = 0
-
-                for x in indexes:
-                    if cells[getpos(x, y)] == expected:
-                        count += 1
-
-                if count == 3:
-                    return True
-
-            for x in indexes:
-                count = 0
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_EXPECTED, expected)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_ROW, False)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_COLUMN, False)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_DIAG, False)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_ROW, error_p)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_COLUMN, error_p)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_DIAG, error_p)
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_STATUS, True)
 
                 for y in indexes:
-                    if cells[getpos(x, y)] == expected:
-                        count += 1
+                    count = 0
 
-                if count == 3:
+                    for x in indexes:
+                        if cells[getpos(x, y)] == expected:
+                            count += 1
+
+                    if count == 3:
+                        span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_ROW, True)
+                        span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_ROW, y)
+                        return True
+
+                for x in indexes:
+                    count = 0
+
+                    for y in indexes:
+                        if cells[getpos(x, y)] == expected:
+                            count += 1
+
+                    if count == 3:
+                        span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_COLUMN, True)
+                        span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_COLUMN, x)
+                        return True
+
+                if cells[getpos(1, 1)] == expected and cells[getpos(2, 2)] == expected and cells[getpos(3, 3)] == expected:
+                    span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_DIAG, True)
+                    span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_DIAG, "left-up-to-right-down")
                     return True
 
-            if cells[getpos(1, 1)] == expected and cells[getpos(2, 2)] == expected and cells[getpos(3, 3)] == expected:
-                return True
+                if cells[getpos(3, 1)] == expected and cells[getpos(2, 2)] == expected and cells[getpos(1, 3)] == expected:
+                    span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_IS_DIAG, True)
+                    span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_DIAG, "left-down-to-right-up")
+                    return True
 
-            if cells[getpos(3, 1)] == expected and cells[getpos(2, 2)] == expected and cells[getpos(1, 3)] == expected:
-                return True
+                span_check_winner.set_attribute(ATT_GAME_CHECK_WINNER_STATUS, False)
 
-            return False
+                return False
 
         px: Optional[int] = None
         py: Optional[int] = None
@@ -239,70 +266,92 @@ def games_game_id_put(game_id: int, body):
 
             warn(parent, f"Game [id={game_id}] is not found")
 
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_NOT_FOUND)
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "game not found")
-            span.set_status(Status(StatusCode.ERROR))
+            span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_NOT_FOUND)
+            span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, "game not found")
+            span_make_a_move.set_status(Status(StatusCode.ERROR))
 
             return NOT_FOUND
 
-        info(parent, f"Game [id={game_id}] handling movement...")
+        with g_tracer.start_as_current_span(span_name("check human move")) as span_check_human_move:
+            info(parent, f"Game [id={game_id}] handling movement...")
 
-        games_game_id_put_request = body
-        if connexion.request.is_json:
-            games_game_id_put_request = GamesGameIdPutRequest.from_dict(connexion.request.get_json())
-            px = games_game_id_put_request.px
-            py = games_game_id_put_request.py
+            games_game_id_put_request = body
+            if connexion.request.is_json:
+                games_game_id_put_request = GamesGameIdPutRequest.from_dict(connexion.request.get_json())
+                px = games_game_id_put_request.px
+                py = games_game_id_put_request.py
 
-        span.set_attribute(ATT_GAME_MOVE_PX, px if px is not None else error_p)
-        span.set_attribute(ATT_GAME_MOVE_PY, py if py is not None else error_p)
+            span_check_human_move.set_attribute(ATT_GAME_MOVE_PX, px if px is not None else error_p)
+            span_check_human_move.set_attribute(ATT_GAME_MOVE_PY, py if py is not None else error_p)
 
-        if px is None or py is None:
-            metrics_make_game_move_request(False)
+            spans = [span_make_a_move, span_check_human_move]
+            span_make_a_move_message = f"see {span_name('check human move')} trace"
 
-            warn(parent, f"Game [id={game_id}] can't handle move, because it's invalid")
+            if px is None or py is None:
+                metrics_make_game_move_request(False)
 
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "px or py undefined")
-            span.set_status(Status(StatusCode.ERROR))
+                warn(parent, f"Game [id={game_id}] can't handle move, because it's invalid")
 
-            return DATA_INVALID
+                for span in spans:
+                    span.set_status(Status(StatusCode.ERROR))
 
-        if px < 1 or py < 1 or px > 3 or py > 3:
-            metrics_make_game_move_request(False)
+                span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, span_make_a_move_message)
+                span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
 
-            warn(parent, f"Game [id={game_id}] can't handle move, because X/Y is out of range [1, 3]")
+                span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "px or py undefined")
 
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "px or py out of range")
-            span.set_status(Status(StatusCode.ERROR))
+                return DATA_INVALID
 
-            return DATA_INVALID
+            if px < 1 or py < 1 or px > 3 or py > 3:
+                metrics_make_game_move_request(False)
 
-        game = g_games[game_id]
+                warn(parent, f"Game [id={game_id}] can't handle move, because X/Y is out of range [1, 3]")
 
-        if GameState(game.game_state) != GameState.NoWinnerYet:
-            metrics_make_game_move_request(False)
+                for span in spans:
+                    span.set_status(Status(StatusCode.ERROR))
 
-            warn(parent, f"Game [id={game_id}] can't handle move, because game is already finished")
+                span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, span_make_a_move_message)
+                span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
 
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_ALREADY_DONE)
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "game is already finished")
-            span.set_status(Status(StatusCode.ERROR))
+                span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "px or py out of range")
 
-            return ALREADY_DONE
+                return DATA_INVALID
 
-        pos = getpos(px, py)
+            game = g_games[game_id]
 
-        if GameFieldUnit(game.game_field[pos]) != GameFieldUnit.NoOccupied:
-            metrics_make_game_move_request(False)
+            if GameState(game.game_state) != GameState.NoWinnerYet:
+                metrics_make_game_move_request(False)
 
-            warn(parent, f"Game [id={game_id}] can't handle move, because cell is already occupied")
+                warn(parent, f"Game [id={game_id}] can't handle move, because game is already finished")
 
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "cell is already occupied")
-            span.set_status(Status(StatusCode.ERROR))
+                for span in spans:
+                    span.set_status(Status(StatusCode.ERROR))
 
-            return DATA_INVALID
+                span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, span_make_a_move_message)
+                span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
+
+                span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "game is already finished")
+
+                return ALREADY_DONE
+
+            pos = getpos(px, py)
+
+            if GameFieldUnit(game.game_field[pos]) != GameFieldUnit.NoOccupied:
+                metrics_make_game_move_request(False)
+
+                warn(parent, f"Game [id={game_id}] can't handle move, because cell is already occupied")
+
+                for span in spans:
+                    span.set_status(Status(StatusCode.ERROR))
+
+                span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, span_make_a_move_message)
+                span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_DATA_INVALID)
+
+                span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "cell is already occupied")
+
+                return DATA_INVALID
+
+            span_check_human_move.set_attribute(ATT_GAME_MOVE_STATUS, "human's move is checked")
 
         game.game_field[pos] = GameFieldUnit.HumanOccupied.value
 
@@ -310,9 +359,9 @@ def games_game_id_put(game_id: int, body):
 
         info(parent, f"Game [id={game_id}] player's move is handled")
 
-        span.set_attribute(ATT_GAME_MOVE_PLAYER_MOVED, True)
+        span_make_a_move.set_attribute(ATT_GAME_MOVE_PLAYER_MOVED, True)
 
-        if check_winner(GameFieldUnit.HumanOccupied, game.game_field):
+        if check_winner(GameFieldUnit.HumanOccupied, game.game_field, "human"):
             game.game_state = GameState.HumanWinner.value
             g_games[game_id] = game
 
@@ -321,10 +370,10 @@ def games_game_id_put(game_id: int, body):
 
             info(parent, f"Game [id={game_id}] finished with {p.value} winning")
 
-            sub_active_game(parent, span)
+            sub_active_game(parent, span_make_a_move)
 
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "player's winner")
-            span.set_attribute(ATT_HTTP_STATUS, ERROR_SUCCESS)
+            span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, "player's winner")
+            span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_SUCCESS)
 
             return game, ERROR_SUCCESS
 
@@ -338,9 +387,9 @@ def games_game_id_put(game_id: int, body):
 
         info(parent, f"Game [id={game_id}] bot's move is handled")
 
-        span.set_attribute(ATT_GAME_MOVE_BOT_MOVED, bot_moved)
+        span_make_a_move.set_attribute(ATT_GAME_MOVE_BOT_MOVED, bot_moved)
 
-        if check_winner(GameFieldUnit.BotOccupied, game.game_field):
+        if check_winner(GameFieldUnit.BotOccupied, game.game_field, "bot"):
             game.game_state = GameState.BotWinner.value
             p = TicTacToePlayer.Bot
 
@@ -348,23 +397,23 @@ def games_game_id_put(game_id: int, body):
 
             info(parent, f"Game [id={game_id}] finished with {p.value} winning")
 
-            sub_active_game(parent, span)
+            sub_active_game(parent, span_make_a_move)
 
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "bot's winner")
+            span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, "bot's winner")
         elif all(GameFieldUnit(cell) != GameFieldUnit.NoOccupied for cell in game.game_field):
             metrics_make_game_finished()
 
             info(parent, f"Game [id={game_id}] finished with draw")
 
-            sub_active_game(parent, span)
+            sub_active_game(parent, span_make_a_move)
 
-            span.set_attribute(ATT_GAME_MOVE_STATUS, "draw")
+            span_make_a_move.set_attribute(ATT_GAME_MOVE_STATUS, "draw")
 
         g_games[game_id] = game
 
         info(parent, f"Game [id={game_id}] handled movement")
 
-        span.set_attribute(ATT_HTTP_STATUS, ERROR_SUCCESS)
+        span_make_a_move.set_attribute(ATT_HTTP_STATUS, ERROR_SUCCESS)
 
         return game, ERROR_SUCCESS
 

@@ -10,21 +10,25 @@
 
 Примеры некоторых трейсов:
 
-| Название трейса                      | HTTP-endpoint            |
-|:-------------------------------------|:-------------------------|
-| **ttt_task_games_delete_game**       | `DELETE /games/${GameId}`|
-| **ttt_task_games_make_move_in_game** | `PUT /games/${GameId}`   |
-| **ttt_task_games_listing**           | `GET /games`             |
+| Название трейса                        | HTTP-endpoint                                                  |
+|:---------------------------------------|:---------------------------------------------------------------|
+| **ttt_task_games_delete_game**         | `DELETE /games/${GameId}`                                      |
+| **ttt_task_games_make_move_in_game**   | `PUT /games/${GameId}` (основной)                              |
+| **ttt_task_games_listing**             | `GET /games`                                                   |
+| **ttt_task_games_check_human_move**    | `PUT /games/${GameId}` (проверка правильности хода человека)   |
+| **ttt_task_games_check_is_bot_winner** | `PUT /games/${GameId}` (проверка является ли бот победителем)  |
 
 Примеры некоторых аттрибутов:
 
-| Название аттрибута             | Назначение                                                       |
-|:-------------------------------|:-----------------------------------------------------------------|
-| **http.request.method**        | Метод HTTP-запроса                                               |
-| **http.response.status_code**  | Код возврата HTTP-запроса                                        |
-| **ttt.game_created_id**        | Идентификатор новой (создано через `PUT /games`) игры            |
-| **ttt.game_move.player_moved** | Индикатор, сделал ли ход игрок с запросом `PUT /games/${GameId}` |
-| **ttt.game_prev_active_total** | Предыдущее количество активных (не завершённых) игр              |
+| Название аттрибута               | Назначение                                                                                                               |
+|:---------------------------------|:-------------------------------------------------------------------------------------------------------------------------|
+| **http.request.method**          | Метод HTTP-запроса                                                                                                       |
+| **http.response.status_code**    | Код возврата HTTP-запроса                                                                                                |
+| **ttt.game_created_id**          | Идентификатор новой (создано через `PUT /games`) игры                                                                    |
+| **ttt.game_move.player_moved**   | Индикатор, сделал ли ход игрок с запросом `PUT /games/${GameId}`                                                         |
+| **ttt.game_prev_active_total**   | Предыдущее количество активных (не завершённых) игр                                                                      |
+| **ttt.game_check_winner.status** | Победил ли тот, кто сейчас сделал ход (игрок или бот)                                                                    |
+| **ttt.game_check_winner.column** | Если тот, кто сделал сейчас ход победил и победитель выстроил горизонтально, то этот аттрибут будет хранить значение $x$ |
 
 Во всех примерах `${GameId}` - это подстановка значения переменной *данной* игры.
 
@@ -64,4 +68,10 @@ docker-compose up -d
 
 ![Traces](.github/assets/traces.png)
 
-![Game move trace example](.github/assets/ttt_task_games_make_move_in_game.png)
+![Game move trace example 1](.github/assets/game_make_move_traces_1.png)
+
+![Game move trace example 2](.github/assets/game_make_move_traces_2.png)
+
+![Game move trace example 3](.github/assets/game_make_move_traces_3.png)
+
+![Game move trace example 3](.github/assets/game_make_move_traces_4.png)
